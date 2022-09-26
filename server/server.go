@@ -21,6 +21,10 @@ type API struct {
 	db *sql.DB
 }
 
+func NewAPI(now func() time.Time, db *sql.DB) *API {
+	return &API{now: now, db: db}
+}
+
 func (s *API) Handler() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -113,7 +117,7 @@ func (s *API) GetUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *API) GetSignUp(w http.ResponseWriter, r *http.Request) {
-	
+
 }
 
 func (s *API) GetLoginUser(w http.ResponseWriter, r *http.Request) {
