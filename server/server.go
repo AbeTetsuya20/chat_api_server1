@@ -286,13 +286,13 @@ func (s *API) GetLoginAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// レスポンスを返す
-	responseGetSignUp := &ResponseGetLoginUser{
+	responseGetLoginAdmin := &ResponseGetLoginAdmin{
 		Success: "true",
 		ID:      v.ID,
 		Token:   token,
 	}
 
-	if err := json.NewEncoder(w).Encode(&responseGetSignUp); err != nil {
+	if err := json.NewEncoder(w).Encode(&responseGetLoginAdmin); err != nil {
 		log.Printf("[ERROR] response encoding failed: %+v", err)
 		writeHTTPError(w, http.StatusInternalServerError)
 		return
