@@ -1,10 +1,12 @@
 package server
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 	"os"
 	"time"
@@ -80,6 +82,8 @@ type User struct {
 	ID         string `json:"id"`
 	Status     string `json:"status"`
 	ChatNumber int    `json:"chat_number"`
+	Token      string
+	Password   string
 }
 
 func (s *API) GetUsers(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +100,7 @@ func (s *API) GetUsers(w http.ResponseWriter, r *http.Request) {
 	users := make([]User, 0)
 	for rows.Next() {
 		var v User
-		if err := rows.Scan(&v.Name, &v.ID, &v.Status, &v.ChatNumber); err != nil {
+		if err := rows.Scan(&v.Name, &v.ID, &v.Status, &v.ChatNumber, &v.Token, &v.Password); err != nil {
 			log.Printf("[ERROR] scan user: %+v", err)
 			writeHTTPError(w, http.StatusInternalServerError)
 			return
@@ -130,6 +134,7 @@ func (s *API) GetSignUp(w http.ResponseWriter, r *http.Request) {
 	headerAddress := r.Header.Get("address")
 	headerPassword := r.Header.Get("password")
 
+	// debug 用
 	fmt.Println("header_name:", headerName)
 	fmt.Println("header_address:", headerAddress)
 	fmt.Println("header_password:", headerPassword)
@@ -154,8 +159,79 @@ func (s *API) GetSignUp(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *API) GetLoginUser(w http.ResponseWriter, r *http.Request) {
+type ResponseGetLoginUser struct {
+	Success string `json:"success"`
+	ID      string `json:"id"`
+	Token   string `json:"token"`
+}
 
+func randomWithCharset(length int) string {
+	charset := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+	b := make([]byte, length)
+
+	for i := range b {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			panic(err)
+		}
+
+		b[i] = charset[n.Int64()]
+	}
+
+	return string(b)
+}
+
+func (s *API) GetLoginUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// header を取得
+	headerName := r.Header.Get("name")
+	headerAddress := r.Header.Get("address")
+	headerPassword := r.Header.Get("password")
+
+	// debug 用
+	fmt.Println("header_name:", headerName)
+	fmt.Println("header_address:", headerAddress)
+	fmt.Println("header_password:", headerPassword)
+
+	// データベースから値を持ってくる
+	query := ""
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		log.Printf("[ERROR] can't login: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
+
+	var v User
+	rows.Scan(&v.Name, &v.ID, &v.Status, &v.ChatNumber, &v.Token, &v.Password)
+
+	// token 生成
+	var token string
+	token = v.ID + randomWithCharset(10)
+
+	// token を登録
+	query2 := ""
+	_, err = s.db.ExecContext(ctx, query2)
+	if err != nil {
+		log.Printf("[ERROR] can't update token: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
+
+	// レスポンスを返す
+	responseGetSignUp := &ResponseGetLoginUser{
+		Success: "true",
+		ID:      v.ID,
+		Token:   token,
+	}
+
+	if err := json.NewEncoder(w).Encode(&responseGetSignUp); err != nil {
+		log.Printf("[ERROR] response encoding failed: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
 }
 
 func (s *API) GetLoginAdmin(w http.ResponseWriter, r *http.Request) {
