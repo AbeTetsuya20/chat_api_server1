@@ -3,6 +3,7 @@ package server
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -45,11 +46,11 @@ func (s *API) Handler() {
 		r.Get("/signup", s.GetSignUp)
 
 		r.Route("/login", func(r chi.Router) {
-			// GET: /api/user/{userID}
-			r.Get("/user/{userID}", s.GetLoginUser)
+			// GET: /api/user/:userID
+			r.Get("/user/", s.GetLoginUser)
 
-			// GET: /api/admin/{adminID}
-			r.Get("/admin/{adminID}", s.GetLoginAdmin)
+			// GET: /api/admin/:adminID
+			r.Get("/admin", s.GetLoginAdmin)
 		})
 
 		// POST: /api/user/profile
@@ -116,8 +117,41 @@ func (s *API) GetUsers(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type ResponseGetSignUp struct {
+	Success string `json:"success"`
+}
+
 func (s *API) GetSignUp(w http.ResponseWriter, r *http.Request) {
 
+	ctx := r.Context()
+
+	// header を取得
+	headerName := r.Header.Get("name")
+	headerAddress := r.Header.Get("address")
+	headerPassword := r.Header.Get("password")
+
+	fmt.Println("header_name:", headerName)
+	fmt.Println("header_address:", headerAddress)
+	fmt.Println("header_password:", headerPassword)
+
+	// ユーザー登録
+	query := ""
+	_, err := s.db.ExecContext(ctx, query)
+	if err != nil {
+		log.Printf("[ERROR] Insert: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
+
+	// レスポンスを返す
+	responseGetSignUp := &ResponseGetSignUp{
+		Success: "true",
+	}
+	if err := json.NewEncoder(w).Encode(&responseGetSignUp); err != nil {
+		log.Printf("[ERROR] response encoding failed: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
 }
 
 func (s *API) GetLoginUser(w http.ResponseWriter, r *http.Request) {
