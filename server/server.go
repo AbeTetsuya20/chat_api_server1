@@ -269,7 +269,7 @@ func (s *API) GetLoginAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var v User
+	var v Admin
 	rows.Scan(&v.Name, &v.ID, &v.Token, &v.Password)
 
 	// token 生成
