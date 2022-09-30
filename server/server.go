@@ -234,8 +234,69 @@ func (s *API) GetLoginUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *API) GetLoginAdmin(w http.ResponseWriter, r *http.Request) {
+type Admin struct {
+	Name     string `json:"name"`
+	ID       string `json:"id"`
+	Token    string
+	Password string
+}
 
+type ResponseGetLoginAdmin struct {
+	Success string `json:"success"`
+	ID      string `json:"id"`
+	Token   string `json:"token"`
+}
+
+func (s *API) GetLoginAdmin(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// header を取得
+	headerName := r.Header.Get("name")
+	headerAddress := r.Header.Get("address")
+	headerPassword := r.Header.Get("password")
+
+	// debug 用
+	fmt.Println("header_name:", headerName)
+	fmt.Println("header_address:", headerAddress)
+	fmt.Println("header_password:", headerPassword)
+
+	// データベースから値を持ってくる
+	query := ""
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		log.Printf("[ERROR] can't login: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
+
+	var v User
+	rows.Scan(&v.Name, &v.ID, &v.Token, &v.Password)
+
+	// token 生成
+	var token string
+	token = v.ID + randomWithCharset(10)
+
+	// token を登録
+	query2 := ""
+	_, err = s.db.ExecContext(ctx, query2)
+	if err != nil {
+		log.Printf("[ERROR] can't update token: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
+
+	// レスポンスを返す
+	responseGetSignUp := &ResponseGetLoginUser{
+		Success: "true",
+		ID:      v.ID,
+		Token:   token,
+	}
+
+	if err := json.NewEncoder(w).Encode(&responseGetSignUp); err != nil {
+		log.Printf("[ERROR] response encoding failed: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
 }
 
 func (s *API) PostUserProfile(w http.ResponseWriter, r *http.Request) {
