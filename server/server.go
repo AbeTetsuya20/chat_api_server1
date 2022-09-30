@@ -205,7 +205,11 @@ func (s *API) GetLoginUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var v User
-	rows.Scan(&v.Name, &v.ID, &v.Status, &v.ChatNumber, &v.Token, &v.Password)
+	if err := rows.Scan(&v.Name, &v.ID, &v.Status, &v.ChatNumber, &v.Token, &v.Password); err != nil {
+		log.Printf("[ERROR] can't scan user: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
 
 	// token 生成
 	var token string
@@ -270,7 +274,11 @@ func (s *API) GetLoginAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var v Admin
-	rows.Scan(&v.Name, &v.ID, &v.Token, &v.Password)
+	if err := rows.Scan(&v.Name, &v.ID, &v.Token, &v.Password); err != nil {
+		log.Printf("[ERROR] can't scan admin: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
 
 	// token 生成
 	var token string
