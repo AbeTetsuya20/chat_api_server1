@@ -38,3 +38,6 @@ CREATE TABLE
 
 INSERT INTO `admin`(id, password,created_at,updated_at)
 VALUES ('admin', 'admin',NOW(),NOW());
+
+INSERT INTO `user`(id,name,address,status,password,chat_number,token,created_at,updated_at)
+VALUES ('test_1234','テストユーザー','test@test.com','online','test',10,'test_1234_12345',NOW(),NOW())

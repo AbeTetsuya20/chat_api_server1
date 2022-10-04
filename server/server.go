@@ -60,7 +60,7 @@ func (s *API) Handler() {
 
 		r.Route("/login", func(r chi.Router) {
 			// GET: /api/user/:userID
-			r.Get("/user/", s.GetLoginUser)
+			r.Get("/user", s.GetLoginUser)
 
 			// GET: /api/admin/:adminID
 			r.Get("/admin", s.GetLoginAdmin)
@@ -85,16 +85,27 @@ func (s *API) Handler() {
 }
 
 type ResponseGetUsers struct {
-	Users []User `json:"users"`
+	Users []ResponceGetUser `json:"users"`
+}
+
+type ResponceGetUser struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	ChatNumber int    `json:"chat_number"`
+	CreatedAT  time.Time
 }
 
 type User struct {
-	Name       string `json:"name"`
-	ID         string `json:"id"`
-	Status     string `json:"status"`
-	ChatNumber int    `json:"chat_number"`
+	ID         string
+	Name       string
+	Address    string
+	Status     string
+	ChatNumber int
 	Token      string
 	Password   string
+	CreatedAT  time.Time
+	UpdatedAt  time.Time
 }
 
 func (s *API) GetUsers(w http.ResponseWriter, r *http.Request) {
@@ -108,16 +119,24 @@ func (s *API) GetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	users := make([]User, 0)
+	users := make([]ResponceGetUser, 0)
 	for rows.Next() {
 		var v User
-		if err := rows.Scan(&v.Name, &v.ID, &v.Status, &v.ChatNumber, &v.Token, &v.Password); err != nil {
+		if err := rows.Scan(&v.ID, &v.Name, &v.Address, &v.Status, &v.Password, &v.ChatNumber, &v.Token, &v.CreatedAT, &v.UpdatedAt); err != nil {
 			log.Printf("[ERROR] scan user: %+v", err)
 			writeHTTPError(w, http.StatusInternalServerError)
 			return
 		}
 
-		users = append(users, v)
+		user := ResponceGetUser{
+			ID:         v.ID,
+			Name:       v.Name,
+			Status:     v.Status,
+			ChatNumber: v.ChatNumber,
+			CreatedAT:  v.CreatedAT,
+		}
+
+		users = append(users, user)
 	}
 
 	resp := &ResponseGetUsers{
@@ -133,7 +152,7 @@ func (s *API) GetUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 type ResponseGetSignUp struct {
-	Success string `json:"success"`
+	Success bool `json:"success"`
 }
 
 func (s *API) GetSignUp(w http.ResponseWriter, r *http.Request) {
@@ -176,10 +195,11 @@ func (s *API) GetSignUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// id を生成
-	
+	userID := "user_" + randomWithCharset(3)
+
 	// ユーザー登録
-	query2 := "INSERT INTO user (id, name, address, status, password, chat_number, token, created_at, updated_at) VALUES () "
-	_, err = s.db.ExecContext(ctx, query2)
+	query2 := "INSERT INTO user (id, name, address, status, password, chat_number, token, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?) "
+	_, err = s.db.ExecContext(ctx, query2, userID, headerName, headerAddress, "online", headerPassword, 0, "", s.now(), s.now())
 	if err != nil {
 		log.Printf("[ERROR] Insert: %+v", err)
 		writeHTTPError(w, http.StatusInternalServerError)
@@ -188,7 +208,7 @@ func (s *API) GetSignUp(w http.ResponseWriter, r *http.Request) {
 
 	// レスポンスを返す
 	responseGetSignUp := &ResponseGetSignUp{
-		Success: "true",
+		Success: true,
 	}
 	if err := json.NewEncoder(w).Encode(&responseGetSignUp); err != nil {
 		log.Printf("[ERROR] response encoding failed: %+v", err)
@@ -234,8 +254,8 @@ func (s *API) GetLoginUser(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("header_password:", headerPassword)
 
 	// データベースから値を持ってくる
-	query := ""
-	rows, err := s.db.QueryContext(ctx, query)
+	query := "SELECT * FROM user WHERE name = ? AND address = ? AND password = ?"
+	rows, err := s.db.QueryContext(ctx, query, headerName, headerAddress, headerPassword)
 	if err != nil {
 		log.Printf("[ERROR] can't login: %+v", err)
 		writeHTTPError(w, http.StatusInternalServerError)
@@ -243,19 +263,21 @@ func (s *API) GetLoginUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var v User
-	if err := rows.Scan(&v.Name, &v.ID, &v.Status, &v.ChatNumber, &v.Token, &v.Password); err != nil {
-		log.Printf("[ERROR] can't scan user: %+v", err)
-		writeHTTPError(w, http.StatusInternalServerError)
-		return
+	for rows.Next() {
+		if err := rows.Scan(&v.ID, &v.Name, &v.Address, &v.Status, &v.Password, &v.ChatNumber, &v.Token, &v.CreatedAT, &v.UpdatedAt); err != nil {
+			log.Printf("[ERROR] can't scan user: %+v", err)
+			writeHTTPError(w, http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// token 生成
 	var token string
-	token = v.ID + randomWithCharset(10)
+	token = v.ID + randomWithCharset(3)
 
 	// token を登録
-	query2 := ""
-	_, err = s.db.ExecContext(ctx, query2)
+	query2 := "UPDATE user SET token = ? WHERE id = ?"
+	_, err = s.db.ExecContext(ctx, query2, token, v.ID)
 	if err != nil {
 		log.Printf("[ERROR] can't update token: %+v", err)
 		writeHTTPError(w, http.StatusInternalServerError)
@@ -309,10 +331,12 @@ func (s *API) GetLoginAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var v Admin
-	if err := rows.Scan(&v.ID, &v.Token, &v.Password); err != nil {
-		log.Printf("[ERROR] can't scan admin: %+v", err)
-		writeHTTPError(w, http.StatusInternalServerError)
-		return
+	for rows.Next() {
+		if err := rows.Scan(&v.ID, &v.Token, &v.Password); err != nil {
+			log.Printf("[ERROR] can't scan admin: %+v", err)
+			writeHTTPError(w, http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// token 生成
