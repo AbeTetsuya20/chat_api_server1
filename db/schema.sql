@@ -30,6 +30,8 @@ CREATE TABLE
                        `id` VARCHAR(10) NOT NULL COMMENT 'ユーザー ID',
                        `Comment` VARCHAR(100) COMMENT 'メッセージ',
                        `Friend_ID` VARCHAR(10) COMMENT 'フレンド一覧',
+                       `created_at` DATETIME NOT NULL COMMENT '作成日時',
+                       `updated_at` DATETIME NOT NULL COMMENT '更新日時',
                         PRIMARY KEY (`id`),
                         FOREIGN KEY (`id`) REFERENCES `user` (`id`),
                         FOREIGN KEY (`Friend_ID`) REFERENCES `user` (`id`)
@@ -40,4 +42,13 @@ INSERT INTO `admin`(id, password,created_at,updated_at)
 VALUES ('admin', 'admin',NOW(),NOW());
 
 INSERT INTO `user`(id,name,address,status,password,chat_number,token,created_at,updated_at)
-VALUES ('test_1234','テストユーザー','test@test.com','online','test',10,'test_1234_12345',NOW(),NOW())
+VALUES ('test_1234','テストユーザー','test1@test.com','online','test',10,'test_1234_12345',NOW(),NOW());
+
+INSERT INTO `user`(id,name,address,status,password,chat_number,token,created_at,updated_at)
+VALUES ('test_5678','テストユーザー','test2@test.com','online','test',10,'test_5678_1234',NOW(),NOW());
+
+INSERT INTO `User_Profile`(id,Comment,Friend_ID,created_at ,updated_at)
+VALUES ('test_1234','テストユーザーです。','test_5678',NOW(), NOW());
+
+INSERT INTO `User_Profile`(id,Comment,Friend_ID,created_at ,updated_at)
+VALUES ('test_5678','テストユーザーです。','test_1234',NOW(), NOW());

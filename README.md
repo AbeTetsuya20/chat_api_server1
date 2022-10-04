@@ -54,12 +54,12 @@ curl -H 'name:name3' -H 'address:tmp@tmp.com' http://localhost:1001/api/signup
 }
 ```
 
-### /api/login/user/:id
+### /api/login/user
 一般ユーザーとしてログイン
 
 - 実行例
 ```shell
-curl -H 'name:name3' -H 'address:tmp@tmp.com' -H 'password:ABC123abc' http://localhost:1001/api/login/user/:id
+curl -H 'name:name3' -H 'address:tmp@tmp.com' -H 'password:ABC123abc' http://localhost:1001/api/login/user
 ```
 
 - 期待される結果
@@ -72,12 +72,12 @@ curl -H 'name:name3' -H 'address:tmp@tmp.com' -H 'password:ABC123abc' http://loc
 }
 ```
 
-### /api/login/admin/:id
+### /api/login/admin
 アドミンとしてログイン
 
 - 実行例
 ```shell
-curl -H 'name:admin1' -H 'address:tmp@tmp.com' -H 'password:ABC123abc' http://localhost:1001/api/login/admin/:id
+curl -H 'name:admin1' -H 'password:ABC123abc' http://localhost:1001/api/login/admin
 ```
 
 - 期待される結果
@@ -99,6 +99,7 @@ User プロフィールの変更
 
 ```shell
 BODY='{
+  "id":"user_xxx",
   "profile_message": "こんにちは！編集済です！"
 }'
 
@@ -106,15 +107,14 @@ curl -i \
   -H 'token: token_name1_12345abcdifgABC' \
   -H 'Content-Type: application/json' \
   -d "$BODY" \
-  --trace-ascii - http://localhost:1001/api/user/profile
+  http://localhost:1001/api/user/profile
 ```
 
 - 期待される結果
 
 ```json
 {
-  "success": true,
-  "error": null
+  "success": true
 }
 ```
 

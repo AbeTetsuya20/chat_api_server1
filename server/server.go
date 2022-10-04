@@ -108,6 +108,14 @@ type User struct {
 	UpdatedAt  time.Time
 }
 
+type UserProfile struct {
+	ID        string
+	Comment   string
+	Friend    string
+	CreatedAT time.Time
+	UpdatedAt time.Time
+}
+
 func (s *API) GetUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -206,6 +214,14 @@ func (s *API) GetSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	query3 := "INSERT INTO User_Profile (id,Comment ,Friend_ID ,created_at ,updated_at) VALUES (?,?,?,?,?) "
+	_, err = s.db.ExecContext(ctx, query3, userID, "こんにちは！", "", s.now(), s.now())
+	if err != nil {
+		log.Printf("[ERROR] Insert: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
+
 	// レスポンスを返す
 	responseGetSignUp := &ResponseGetSignUp{
 		Success: true,
@@ -263,12 +279,19 @@ func (s *API) GetLoginUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var v User
+	var count int
 	for rows.Next() {
+		count++
 		if err := rows.Scan(&v.ID, &v.Name, &v.Address, &v.Status, &v.Password, &v.ChatNumber, &v.Token, &v.CreatedAT, &v.UpdatedAt); err != nil {
 			log.Printf("[ERROR] can't scan user: %+v", err)
 			writeHTTPError(w, http.StatusInternalServerError)
 			return
 		}
+	}
+	if count != 1 {
+		log.Printf("[ERROR] can't get user: %d 回のマッチ", count)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
 	}
 
 	// token 生成
@@ -276,8 +299,8 @@ func (s *API) GetLoginUser(w http.ResponseWriter, r *http.Request) {
 	token = v.ID + randomWithCharset(3)
 
 	// token を登録
-	query2 := "UPDATE user SET token = ? WHERE id = ?"
-	_, err = s.db.ExecContext(ctx, query2, token, v.ID)
+	query2 := "UPDATE user SET token = ? ,updated_at = ? WHERE id = ?"
+	_, err = s.db.ExecContext(ctx, query2, token, s.now(), v.ID)
 	if err != nil {
 		log.Printf("[ERROR] can't update token: %+v", err)
 		writeHTTPError(w, http.StatusInternalServerError)
@@ -299,13 +322,15 @@ func (s *API) GetLoginUser(w http.ResponseWriter, r *http.Request) {
 }
 
 type Admin struct {
-	ID       string `json:"id"`
-	Token    string
-	Password string
+	ID        string
+	Token     string
+	Password  string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type ResponseGetLoginAdmin struct {
-	Success string `json:"success"`
+	Success bool   `json:"success"`
 	ID      string `json:"id"`
 	Token   string `json:"token"`
 }
@@ -322,8 +347,8 @@ func (s *API) GetLoginAdmin(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("header_password:", headerPassword)
 
 	// データベースから値を持ってくる
-	query := ""
-	rows, err := s.db.QueryContext(ctx, query)
+	query := "SELECT * FROM admin WHERE id = ? AND password = ?"
+	rows, err := s.db.QueryContext(ctx, query, headerID, headerPassword)
 	if err != nil {
 		log.Printf("[ERROR] can't login: %+v", err)
 		writeHTTPError(w, http.StatusInternalServerError)
@@ -332,7 +357,7 @@ func (s *API) GetLoginAdmin(w http.ResponseWriter, r *http.Request) {
 
 	var v Admin
 	for rows.Next() {
-		if err := rows.Scan(&v.ID, &v.Token, &v.Password); err != nil {
+		if err := rows.Scan(&v.ID, &v.Token, &v.Password, &v.CreatedAt, &v.UpdatedAt); err != nil {
 			log.Printf("[ERROR] can't scan admin: %+v", err)
 			writeHTTPError(w, http.StatusInternalServerError)
 			return
@@ -343,9 +368,11 @@ func (s *API) GetLoginAdmin(w http.ResponseWriter, r *http.Request) {
 	var token string
 	token = v.ID + randomWithCharset(10)
 
+	fmt.Println("ID: ", v.ID)
+
 	// token を登録
-	query2 := ""
-	_, err = s.db.ExecContext(ctx, query2)
+	query2 := "UPDATE admin SET token = ?, updated_at = ? WHERE id = ?"
+	_, err = s.db.ExecContext(ctx, query2, token, s.now(), headerID)
 	if err != nil {
 		log.Printf("[ERROR] can't update token: %+v", err)
 		writeHTTPError(w, http.StatusInternalServerError)
@@ -354,7 +381,7 @@ func (s *API) GetLoginAdmin(w http.ResponseWriter, r *http.Request) {
 
 	// レスポンスを返す
 	responseGetLoginAdmin := &ResponseGetLoginAdmin{
-		Success: "true",
+		Success: true,
 		ID:      v.ID,
 		Token:   token,
 	}
@@ -366,8 +393,76 @@ func (s *API) GetLoginAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *API) PostUserProfile(w http.ResponseWriter, r *http.Request) {
+type RequestPostUserProfile struct {
+	ID             string `json:"id"`
+	ProfileMessage string `json:"profile_message"`
+}
 
+type ResponsePostUserProfile struct {
+	Success bool `json:"success"`
+}
+
+func (s *API) PostUserProfile(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	token := r.Header.Get("token")
+
+	req := &RequestPostUserProfile{}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// デコードに失敗した場合はログ出力して 400 Bad Request を返す。
+		log.Printf("[ERROR] request decoding failed: %+v", err)
+		writeErrorResponse(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	fmt.Println("req Token: ", token)
+	fmt.Println("req ProfileMessage: ", req.ProfileMessage)
+	fmt.Println("req ID: ", req.ID)
+
+	// token が正しいか確かめる
+	query := "select count(*) from user where token = ? AND id = ?"
+	rows, err := s.db.QueryContext(ctx, query, token, req.ID)
+	if err != nil {
+		log.Printf("[ERROR] can't get user: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
+
+	var count int
+	for rows.Next() {
+		err := rows.Scan(&count)
+		if err != nil {
+			log.Printf("[ERROR] can't scan count: %+v", err)
+			writeHTTPError(w, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if count != 1 {
+		log.Printf("[ERROR] can't get user by token: 複数一致、または不正なトークンです。")
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
+
+	// ID に紐づく profile を更新する
+	query2 := "UPDATE User_Profile SET Comment = ? ,updated_at = ? WHERE id = ?"
+	_, err = s.db.ExecContext(ctx, query2, req.ProfileMessage, s.now(), req.ID)
+	if err != nil {
+		log.Printf("[ERROR] can't update Profile: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
+
+	// レスポンスを返す
+	responsePostUserProfile := &ResponsePostUserProfile{
+		Success: true,
+	}
+
+	if err := json.NewEncoder(w).Encode(&responsePostUserProfile); err != nil {
+		log.Printf("[ERROR] response encoding failed: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
 }
 
 func (s *API) PostAdminBan(w http.ResponseWriter, r *http.Request) {
