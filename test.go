@@ -1,50 +1,47 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
+	_ "github.com/go-sql-driver/mysql"
 	"log"
-	"net/http"
-	"os"
-	"strings"
-
-	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
-	"github.com/go-chi/render"
+	"time"
 )
 
+type Admin struct {
+	ID        string
+	Token     sql.NullString
+	Password  string
+	CreatedAT *time.Time
+	UpdatedAt *time.Time
+}
+
 func main() {
-	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	fmt.Println("Start!")
+	// database に接続
+	ctx := context.Background()
+	db, err := sql.Open("mysql", "root:tmp@tcp(127.0.0.1:3306)/server?parseTime=true")
+	if err != nil {
+		log.Fatalf("main sql.Open error err:%v", err)
+	}
+	defer db.Close()
 
-	r.Get("/api/{id}", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("/api/:id")
+	query := "SELECT * FROM admin"
+	row, err := db.QueryContext(ctx, query)
 
-		reqID := strings.TrimPrefix(r.URL.Path, "/api/")
-		fmt.Println("reqID: ", reqID)
-
-		// header を取得
-		header_name := r.Header.Get("name")
-		header_address := r.Header.Get("address")
-		header_password := r.Header.Get("password")
-
-		fmt.Println("header_name:", header_name)
-		fmt.Println("header_address:", header_address)
-		fmt.Println("header_password:", header_password)
-
-		data := map[string]string{
-			"message": "hello",
-			"request": reqID,
+	for row.Next() {
+		a := &Admin{}
+		err := row.Scan(&a.ID, &a.Token, &a.Password, &a.CreatedAT, &a.UpdatedAt)
+		if err != nil {
+			log.Fatalf("main sql.Scan error err:%v", err)
 		}
-		render.JSON(w, r, data)
-	})
-
-	addr := os.Getenv("Addr")
-	if addr == "" {
-		addr = ":4444"
+		fmt.Printf("admin: %+v \n", a)
+		fmt.Println("ID: ", a.ID)
 	}
 
-	log.Printf("listen: %s", addr)
-	if err := http.ListenAndServe(addr, r); err != nil {
-		log.Fatalf("!! %+v", err)
-	}
+	fmt.Println("Success!")
+
+	//db.QueryContext(ctx,)
+
 }

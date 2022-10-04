@@ -16,6 +16,17 @@ import (
 	"github.com/go-chi/render"
 )
 
+// DB 設計
+
+// User
+// ID, Name, Status, ChatNumber, Token, Password
+
+// Admin
+// ID, Name, Token, Password
+
+// User_Profile
+// ID, Comment, Friend
+
 // API API を表す構造体。
 type API struct {
 	// now 現在時刻を取得するための関数
@@ -89,7 +100,7 @@ type User struct {
 func (s *API) GetUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	query := ""
+	query := "SELECT * FROM user"
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
 		log.Printf("[ERROR] not found User: %+v", err)
@@ -139,9 +150,36 @@ func (s *API) GetSignUp(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("header_address:", headerAddress)
 	fmt.Println("header_password:", headerPassword)
 
+	// address が以前登録されたものと一致しないか確認
+	query := "select count(*) from user where address = ?"
+	rows, err := s.db.QueryContext(ctx, query, headerAddress)
+
+	if err != nil {
+		log.Printf("[ERROR] not found User: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
+
+	// count が 0 でない場合 Error
+	var count int
+	for rows.Next() {
+		if err := rows.Scan(&count); err != nil {
+			log.Printf("[ERROR] scan user: %+v", err)
+			writeHTTPError(w, http.StatusInternalServerError)
+			return
+		}
+	}
+	if count != 0 {
+		log.Printf("[ERROR] address is already registered")
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
+
+	// id を生成
+	
 	// ユーザー登録
-	query := ""
-	_, err := s.db.ExecContext(ctx, query)
+	query2 := "INSERT INTO user (id, name, address, status, password, chat_number, token, created_at, updated_at) VALUES () "
+	_, err = s.db.ExecContext(ctx, query2)
 	if err != nil {
 		log.Printf("[ERROR] Insert: %+v", err)
 		writeHTTPError(w, http.StatusInternalServerError)
@@ -239,7 +277,6 @@ func (s *API) GetLoginUser(w http.ResponseWriter, r *http.Request) {
 }
 
 type Admin struct {
-	Name     string `json:"name"`
 	ID       string `json:"id"`
 	Token    string
 	Password string
@@ -255,13 +292,11 @@ func (s *API) GetLoginAdmin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// header を取得
-	headerName := r.Header.Get("name")
-	headerAddress := r.Header.Get("address")
+	headerID := r.Header.Get("id")
 	headerPassword := r.Header.Get("password")
 
 	// debug 用
-	fmt.Println("header_name:", headerName)
-	fmt.Println("header_address:", headerAddress)
+	fmt.Println("header_id:", headerID)
 	fmt.Println("header_password:", headerPassword)
 
 	// データベースから値を持ってくる
@@ -274,7 +309,7 @@ func (s *API) GetLoginAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var v Admin
-	if err := rows.Scan(&v.Name, &v.ID, &v.Token, &v.Password); err != nil {
+	if err := rows.Scan(&v.ID, &v.Token, &v.Password); err != nil {
 		log.Printf("[ERROR] can't scan admin: %+v", err)
 		writeHTTPError(w, http.StatusInternalServerError)
 		return

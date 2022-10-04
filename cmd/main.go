@@ -41,10 +41,10 @@ func main() {
 		DBUsername string
 		DBPassword string
 	}{
-		"tmp",
-		200,
-		"tmp",
-		"tmp",
+		"localhost",
+		3306,
+		"server",
+		"root",
 		"tmp",
 	}
 
