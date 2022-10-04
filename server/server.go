@@ -91,7 +91,7 @@ type User struct {
 	Address    string
 	Status     string
 	ChatNumber int
-	Token      string
+	Token      sql.NullString
 	Password   string
 	CreatedAT  time.Time
 	UpdatedAt  time.Time
@@ -312,7 +312,7 @@ func (s *API) GetLoginUser(w http.ResponseWriter, r *http.Request) {
 
 type Admin struct {
 	ID        string
-	Token     string
+	Token     sql.NullString
 	Password  string
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -454,8 +454,81 @@ func (s *API) PostUserProfile(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type RequestAdminBan struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+}
+
+type ResponseAdminBan struct {
+	Success bool `json:"success"`
+}
+
 func (s *API) PostAdminBan(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	token := r.Header.Get("token")
+
+	req := &RequestAdminBan{}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// デコードに失敗した場合はログ出力して 400 Bad Request を返す。
+		log.Printf("[ERROR] request decoding failed: %+v", err)
+		writeErrorResponse(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	fmt.Println("req Token: ", token)
+	fmt.Println("req reason: ", req.Reason)
+	fmt.Println("req ID: ", req.ID)
+
+	// admin のトークンが正しいか確かめる
+	q := "SELECT count(*) FROM admin WHERE token = ?"
+	row, err := s.db.QueryContext(ctx, q, token)
+
+	var count int
+	for row.Next() {
+		count++
+		if err := row.Scan(&count); err != nil {
+			log.Printf("[ERROR] can't scan count: %+v", err)
+			writeHTTPError(w, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if count != 1 {
+		log.Printf("[ERROR] can't get admin by token: 複数一致、または不正なトークンです。: マッチ回数: %d", count)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
 
 	// 指定したユーザーのステータスを ban にする
-	
+	query := "UPDATE user SET status = ?, updated_at = ? WHERE id = ?"
+	_, err = s.db.ExecContext(ctx, query, "ban", s.now(), req.ID)
+	if err != nil {
+		log.Printf("[ERROR] can't update user: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
+
+	// profile も更新する
+	query2 := "UPDATE User_Profile SET Comment = ?, updated_at = ? WHERE id = ?"
+	_, err = s.db.ExecContext(ctx, query2, fmt.Sprintf("banされました。reason: %s", req.Reason), s.now(), req.ID)
+	if err != nil {
+		log.Printf("[ERROR] can't update user: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
+
+	// レスポンスを返す
+	responseAdminBan := &ResponseAdminBan{
+		Success: true,
+	}
+
+	log.Printf("success! %+v", responseAdminBan)
+
+	if err := json.NewEncoder(w).Encode(&responseAdminBan); err != nil {
+		log.Printf("[ERROR] response encoding failed: %+v", err)
+		writeHTTPError(w, http.StatusInternalServerError)
+		return
+	}
+
 }
