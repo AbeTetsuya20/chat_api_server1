@@ -77,7 +77,7 @@ curl -H 'name:name3' -H 'address:tmp@tmp.com' -H 'password:ABC123abc' http://loc
 
 - 実行例
 ```shell
-curl -H 'name:admin1' -H 'password:ABC123abc' http://localhost:1001/api/login/admin
+curl -H 'id:admin' -H 'password:ABC123abc' http://localhost:1001/api/login/admin
 ```
 
 - 期待される結果

@@ -16,17 +16,6 @@ import (
 	"github.com/go-chi/render"
 )
 
-// DB 設計
-
-// User
-// ID, Name, Status, ChatNumber, Token, Password
-
-// Admin
-// ID, Name, Token, Password
-
-// User_Profile
-// ID, Comment, Friend
-
 // API API を表す構造体。
 type API struct {
 	// now 現在時刻を取得するための関数
@@ -467,4 +456,6 @@ func (s *API) PostUserProfile(w http.ResponseWriter, r *http.Request) {
 
 func (s *API) PostAdminBan(w http.ResponseWriter, r *http.Request) {
 
+	// 指定したユーザーのステータスを ban にする
+	
 }
